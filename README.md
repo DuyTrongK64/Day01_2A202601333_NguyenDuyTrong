@@ -8,8 +8,8 @@ Xem hướng dẫn step-by-step ở website: https://codelabs.vlearn.dev/codelab
 ## Mục Tiêu
 
 Sau buổi lab này, bạn sẽ:
-- Gọi được OpenAI Chat Completions API và hiểu các tham số sinh text quan trọng (temperature, top_p, max_tokens)
-- So sánh GPT-4o và GPT-4o-mini về chất lượng, độ trễ và chi phí
+- Gọi được Gemini bằng SDK chính thức Google Gen AI và hiểu các tham số sinh text quan trọng (temperature, top_p, max_tokens)
+- So sánh Gemini 2.5 Pro và Gemini 2.5 Flash về chất lượng, độ trễ và chi phí
 - Dùng system prompt để định hình persona của model
 - Đếm token bằng tiktoken và tính chi phí chính xác theo giá input/output
 - Xây dựng chatbot streaming có lịch sử hội thoại và retry chịu lỗi
@@ -24,10 +24,8 @@ mỗi block có checkpoint theo giờ để bạn tự biết mình đang đúng
 
 ### Yêu cầu
 - Python 3.10+
-- API key để chạy thủ công (toàn bộ kiểm thử dùng mock, không cần key) — một trong hai:
-  - **OpenAI API key**, hoặc
-  - **NVIDIA NIM key — miễn phí**, đăng ký ~5 phút tại [build.nvidia.com](https://build.nvidia.com):
-    xem hướng dẫn từng bước ở [LAB_GUIDE.md — Phụ lục B](LAB_GUIDE.md#phụ-lục-b--lấy-api-key-miễn-phí-từ-nvidia-nim)
+- **Gemini API key** để chạy thủ công (toàn bộ kiểm thử dùng mock, không cần
+  key). Tạo key tại [Google AI Studio](https://aistudio.google.com/app/apikey).
 
 ### Tạo môi trường ảo & cài thư viện
 
@@ -57,7 +55,8 @@ Chỉ cần cho phần chạy thật — pytest không cần key.
 cp .env.example .env             # Windows: copy .env.example .env
 ```
 
-Mở `.env` và thay `sk-your-key-here` bằng key thật.
+Mở `.env` và thay `your-gemini-api-key-here` bằng key thật. Project sử dụng
+package chính thức `google-genai`.
 
 Code trong `template.py` đã gọi sẵn `load_dotenv()` nên key trong `.env`
 được nạp tự động. File `.env` đã nằm trong `.gitignore` — **tuyệt đối không

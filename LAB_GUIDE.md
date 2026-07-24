@@ -5,12 +5,13 @@ Tài liệu này dắt bạn qua từng bước của buổi lab. Mỗi block k�
 **CHECKPOINT** có mốc giờ — nếu đến giờ mà bạn chưa xong, đọc mục
 **"Nếu bạn bị chậm"** để biết mức tối thiểu cần đạt trước khi đi tiếp.
 
-Toàn bộ code viết trong `template.py`. Toàn bộ test chạy bằng mock —
-**không tốn tiền API khi chạy pytest**.
+Toàn bộ code viết trong `template.py`. Project gọi **Google Gemini API**
+bằng SDK chính thức `google-genai`.
+Toàn bộ test chạy bằng mock — **không tốn tiền API khi chạy pytest**.
 
-> 💡 **Quy tắc quan trọng nhất của buổi lab:** import OpenAI **bên trong hàm**
-> (`from openai import OpenAI` nằm trong thân hàm, không nằm đầu file).
-> Lý do: các bài test thay thế (mock) `openai.OpenAI` — nếu bạn import ở đầu
+> 💡 **Quy tắc quan trọng nhất của buổi lab:** import `genai` **bên trong hàm**
+> (`from google import genai` nằm trong thân hàm, không nằm đầu file).
+> Lý do: các bài test thay thế (mock) `google.genai.Client` — nếu bạn import ở đầu
 > file, hàm của bạn giữ tham chiếu đến class thật và test sẽ gọi API thật
 > → fail vì không có key.
 
@@ -40,19 +41,25 @@ Dấu hiệu venv đã bật: đầu dòng lệnh hiện `(.venv)`. Nếu PowerS
 script, chạy một lần `Set-ExecutionPolicy -ExecutionPolicy RemoteSigned
 -Scope CurrentUser`, hoặc dùng Command Prompt: `.venv\Scripts\activate.bat`.
 
-**Bước 2.** Thiết lập API key qua file `.env` (giảng viên cung cấp key dùng
-chung của lớp):
+**Bước 2.** Tạo Gemini API key tại
+[Google AI Studio](https://aistudio.google.com/app/apikey), rồi thiết lập qua
+file `.env`:
 ```bash
 cp .env.example .env             # Windows: copy .env.example .env
 ```
-Mở file `.env` vừa tạo, thay `sk-your-key-here` bằng key thật. `template.py`
-đã gọi sẵn `load_dotenv()` nên key được nạp tự động — không cần `export`.
+Mở file `.env` vừa tạo, thay `your-gemini-api-key-here` bằng key thật:
+```dotenv
+GEMINI_API_KEY=AIza...key-cua-ban
+LAB_MODEL=gemini-2.5-pro
+LAB_MINI_MODEL=gemini-2.5-flash
+```
+`template.py` đã gọi sẵn `load_dotenv()` và ánh xạ cấu hình cho client tương
+thích, nên không cần `export`.
 Key chỉ cần cho phần **chạy thật** (demo, exercises); pytest không cần key.
 `.env` đã nằm trong `.gitignore` — không bao giờ commit key.
 
-> 🆓 **Không có key OpenAI?** Lấy key **miễn phí** từ NVIDIA NIM theo
-> [Phụ lục B](#phụ-lục-b--lấy-api-key-miễn-phí-từ-nvidia-nim) — chỉ mất
-> ~5 phút đăng ký, không cần thẻ tín dụng, và không phải sửa dòng code nào.
+> Xem hướng dẫn tạo và kiểm tra Gemini key chi tiết ở
+> [Phụ lục B](#phụ-lục-b--cấu-hình-google-gemini-api).
 
 **Bước 3.** Chạy thử bộ test:
 ```bash
@@ -62,7 +69,7 @@ pytest tests/ -v
 ### ✅ CHECKPOINT 0 (10h00)
 Lệnh trên phải **chạy được và báo fail hàng loạt** với thông báo
 `NotImplementedError` — đó là dấu hiệu môi trường đã đúng, chỉ còn thiếu code
-của bạn. Nếu gặp `ModuleNotFoundError: No module named 'openai'` → môi trường
+của bạn. Nếu gặp `ModuleNotFoundError: No module named 'google.genai'` → môi trường
 ảo chưa activate hoặc chưa `pip install`.
 
 ---
@@ -72,92 +79,91 @@ của bạn. Nếu gặp `ModuleNotFoundError: No module named 'openai'` → mô
 ### Mục tiêu
 - Gọi Chat Completions API, đo độ trễ
 - Hiểu tham số `model`, `temperature`, `top_p`, `max_tokens`
-- So sánh GPT-4o với GPT-4o-mini về chất lượng / độ trễ / chi phí
+- So sánh Gemini 2.5 Pro với Gemini 2.5 Flash về chất lượng / độ trễ / chi phí
 
 ### Kiến thức nền (giảng viên demo 10')
 
-Một lời gọi Chat Completions cơ bản:
+Một lời gọi Gemini cơ bản bằng SDK chính thức:
 
 ```python
-from openai import OpenAI
+from google import genai
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-response = client.chat.completions.create(
-    model="gpt-4o",
-    messages=[{"role": "user", "content": "Xin chào!"}],
-    temperature=0.7,   # 0.0 = ổn định, càng cao càng "sáng tạo"
-    top_p=0.9,         # nucleus sampling — thường chỉ chỉnh 1 trong 2
-    max_tokens=256,    # chặn trần độ dài output (và chi phí!)
+client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+response = client.models.generate_content(
+    model="gemini-2.5-flash",
+    contents="Xin chào!",
+    config={
+        "temperature": 0.7,
+        "top_p": 0.9,
+        "max_output_tokens": 256,
+    },
 )
-text = response.choices[0].message.content
+text = response.text
 ```
 
 Ví dụ chạy sẵn để tham khảo thêm: [Google Colab của khóa](https://colab.research.google.com/drive/172zCiXpLr1FEXMRCAbmZoqTrKiSkUERm?usp=sharing)
 
-### Task 1.1 — `call_openai` (~20')
+### Task 1.1 — `call_gemini` (~20')
 
-**Bước 1.** Mở `template.py`, tìm hàm `call_openai`. Đọc kỹ docstring —
+**Bước 1.** Mở `template.py`, tìm hàm `call_gemini`. Đọc kỹ docstring —
 chữ ký hàm và kiểu trả về là "hợp đồng" mà test sẽ kiểm tra, đừng sửa chúng.
-
 **Bước 2.** Xóa dòng `raise NotImplementedError(...)`, viết phần thân:
 ```python
-from openai import OpenAI          # import TRONG hàm — xem quy tắc ở đầu guide
-
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+from google import genai           # import TRONG hàm
+client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 ```
 
 **Bước 3.** Đo thời gian quanh lời gọi API — `latency` là thời gian **chỉ của
 lời gọi mạng**, nên `time.time()` phải nằm sát trước và sau `create(...)`:
 ```python
 start = time.time()
-response = client.chat.completions.create(
+response = client.models.generate_content(
     model=model,
-    messages=[{"role": "user", "content": prompt}],
-    temperature=temperature,
-    top_p=top_p,
-    max_tokens=max_tokens,
+    contents=prompt,
+    config={"temperature": temperature, "top_p": top_p,
+            "max_output_tokens": max_tokens},
 )
 latency = time.time() - start
 ```
 
 **Bước 4.** Trả về tuple `(text, latency)`:
 ```python
-return response.choices[0].message.content, latency
+return response.text, latency
 ```
 
 **Bước 5.** Kiểm tra ngay (đừng đợi xong hết mới test):
 ```bash
-pytest tests/test_part1.py -k CallOpenAI -v
+pytest tests/test_part1.py -k CallGemini -v
 ```
 
-### Task 1.2 — `call_openai_mini` (~5')
+### Task 1.2 — `call_gemini_flash` (~5')
 
 **Bước 1.** Hàm này chỉ là "phím tắt" gọi model rẻ hơn — tái sử dụng Task 1.1,
 đừng copy-paste code:
 ```python
-return call_openai(prompt, model=OPENAI_MINI_MODEL,
+return call_gemini(prompt, model=GEMINI_FLASH_MODEL,
                    temperature=temperature, top_p=top_p, max_tokens=max_tokens)
 ```
-Tái sử dụng nghĩa là: sau này sửa `call_openai` một chỗ, cả hai model đều
+Tái sử dụng nghĩa là: sau này sửa `call_gemini` một chỗ, cả hai model đều
 hưởng lợi.
 
 ### Task 1.3 — `compare_models` (~15')
 
 **Bước 1.** Gọi lần lượt hai hàm trên với cùng `prompt`:
 ```python
-gpt4o_text, gpt4o_latency = call_openai(prompt)
-mini_text, mini_latency = call_openai_mini(prompt)
+gemini_text, gemini_latency = call_gemini(prompt)
+flash_text, flash_latency = call_gemini_flash(prompt)
 ```
 
-**Bước 2.** Ước tính chi phí output của GPT-4o. Ở block này ta dùng ước lượng
+**Bước 2.** Ước tính chi phí output của model chính. Ở block này ta dùng ước lượng
 thô "0.75 từ ≈ 1 token" (Block 2 sẽ tính chính xác bằng tiktoken):
 ```python
-cost = (len(gpt4o_text.split()) / 0.75) / 1000 \
-       * PRICING_PER_1K_TOKENS["gpt-4o"]["output"]
+cost = (len(gemini_text.split()) / 0.75) / 1000 \
+       * PRICING_PER_1K_TOKENS[GEMINI_MODEL]["output"]
 ```
 
-**Bước 3.** Ghép dict đúng 5 key như docstring (`gpt4o_response`,
-`mini_response`, `gpt4o_latency`, `mini_latency`, `gpt4o_cost_estimate`).
+**Bước 3.** Ghép dict đúng 5 key như docstring (`gemini_response`,
+`flash_response`, `gemini_latency`, `flash_latency`, `gemini_cost_estimate`).
 Tên key phải khớp từng ký tự — test so sánh chính xác.
 
 ### ✅ CHECKPOINT 1 (10h40)
@@ -166,7 +172,7 @@ pytest tests/test_part1.py -v
 ```
 Kỳ vọng: **10 passed** —
 ```
-tests/test_part1.py::TestCallOpenAI::test_returns_non_empty_string PASSED
+tests/test_part1.py::TestCallGemini::test_returns_non_empty_string PASSED
 ...
 ========================= 10 passed in ~1s =========================
 ```
@@ -177,7 +183,7 @@ python -c "from template import compare_models; \
 ```
 Sau đó trả lời **Câu 1.1 → 1.3** trong `exercises.md`.
 
-**Nếu bạn bị chậm:** tối thiểu Task 1.1 phải pass (`-k CallOpenAI`) rồi sang
+**Nếu bạn bị chậm:** tối thiểu Task 1.1 phải pass (`-k CallGemini`) rồi sang
 Block 2 — Task 1.2/1.3 quay lại làm trong giờ wrap-up. Block 2 và 3 không
 phụ thuộc Task 1.3.
 
@@ -186,41 +192,37 @@ phụ thuộc Task 1.3.
 # 🕘 10h40–11h20 · BLOCK 2: System Prompt & Token
 
 ### Mục tiêu
-- Dùng message role `system` để định persona cho model
-- Đếm token thật bằng `tiktoken` thay vì đoán từ số từ
+- Dùng `system_instruction` để định persona cho model
+- Ước lượng token bằng `tiktoken` và fallback cho model Gemini
 - Tính chi phí tách bạch input / output
 
 ### Kiến thức nền (giảng viên demo 10')
 
-`messages` là một **danh sách hội thoại**, không chỉ một câu hỏi. Message đầu
-tiên với `role: "system"` là "chỉ thị đạo diễn" — model sẽ bám theo nó trong
-toàn bộ phản hồi:
+Gemini nhận chỉ dẫn hệ thống qua `config.system_instruction`; lịch sử hội
+thoại nằm riêng trong `contents`:
 
 ```python
-messages = [
-    {"role": "system", "content": "Bạn là giáo viên tiểu học..."},
-    {"role": "user", "content": "Giải thích blockchain là gì?"},
-]
+contents = "Giải thích blockchain là gì?"
+config = {"system_instruction": "Bạn là giáo viên tiểu học..."}
 ```
 
 Chi phí API tính theo **token**, không theo từ, và giá input khác giá output
-(xem `PRICING_PER_1K_TOKENS` trong template). `tiktoken` là thư viện chính
-thức để đếm token đúng như OpenAI tính tiền.
+(xem `PRICING_PER_1K_TOKENS` trong template). `tiktoken` được giữ lại vì
+bộ test của bài lab sử dụng nó; với model Gemini, kết quả chỉ là **ước lượng**
+vì tokenizer thực tế của Gemini khác tokenizer mà `tiktoken` sử dụng.
 
 ### Task 2.1 — `chat_with_system_prompt` (~15')
 
-**Bước 1.** Copy cấu trúc `call_openai` của bạn (import trong hàm, đo giờ,
-trả tuple) — điểm khác duy nhất là `messages` có 2 phần tử:
+**Bước 1.** Copy cấu trúc `call_gemini` của bạn (import trong hàm, đo giờ,
+trả tuple) — điểm khác là thêm `system_instruction` vào config:
 ```python
-messages=[
-    {"role": "system", "content": system_prompt},
-    {"role": "user", "content": user_prompt},
-]
+contents=user_prompt,
+config={"system_instruction": system_prompt, ...}
 ```
 
 **Bước 2.** Chạy `pytest tests/test_part2.py -k SystemPrompt -v`. Test sẽ
 kiểm tra cả việc nội dung `system_prompt` thực sự được gửi lên — nếu bạn quên
-truyền hoặc đảo role, test chỉ tên lỗi rất rõ.
+truyền, test chỉ tên lỗi rất rõ.
 
 ### Task 2.2 — `count_tokens` (~10')
 
@@ -231,8 +233,8 @@ enc = tiktoken.encoding_for_model(model)
 return len(enc.encode(text))
 ```
 
-**Bước 2.** Bọc try/except. `tiktoken` cần mạng lần đầu để tải bảng mã hóa và
-sẽ raise nếu gặp tên model lạ — hàm tiện ích không được crash vì chuyện đó:
+**Bước 2.** Bọc try/except. `tiktoken` không nhận diện tên model Gemini nên
+sẽ raise; hàm tiện ích phải chuyển sang ước lượng dự phòng:
 ```python
 try:
     import tiktoken
@@ -301,10 +303,10 @@ Với `stream=True`, API trả về **iterator các chunk** thay vì một respo
 trọn vẹn — in ra đến đâu người dùng đọc đến đó:
 
 ```python
-stream = client.chat.completions.create(model=..., messages=..., stream=True)
+stream = client.models.generate_content_stream(model=..., contents=..., config=...)
 reply = ""
 for chunk in stream:
-    delta = chunk.choices[0].delta.content or ""   # chunk cuối là None → or ""
+    delta = chunk.text or ""
     print(delta, end="", flush=True)
     reply += delta
 ```
@@ -317,8 +319,8 @@ chuẩn: thử lại với thời gian chờ **tăng gấp đôi** sau mỗi l�
 
 **Bước 1.** Dựng khung vòng lặp trước, chưa cần API:
 ```python
-from openai import OpenAI
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+from google import genai
+client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 history = []
 while True:
     user_msg = input("Bạn: ")
@@ -326,12 +328,12 @@ while True:
         break
 ```
 
-**Bước 2.** Trong vòng lặp, ghép messages = history + tin nhắn mới rồi gọi
+**Bước 2.** Trong vòng lặp, ghép `contents` = history + tin nhắn mới rồi gọi
 API với `stream=True`:
 ```python
-messages = history + [{"role": "user", "content": user_msg}]
-stream = client.chat.completions.create(
-    model=OPENAI_MODEL, messages=messages, stream=True,
+contents = history + [{"role": "user", "parts": [{"text": user_msg}]}]
+stream = client.models.generate_content_stream(
+    model=GEMINI_MODEL, contents=contents,
 )
 ```
 
@@ -341,8 +343,8 @@ thức nền — nhớ `or ""` cho chunk cuối).
 **Bước 4.** Cập nhật history sau mỗi lượt và **cắt còn 3 lượt cuối**. Một
 lượt = 1 message user + 1 message assistant, nên 3 lượt = 6 message:
 ```python
-history.append({"role": "user", "content": user_msg})
-history.append({"role": "assistant", "content": reply})
+history.append({"role": "user", "parts": [{"text": user_msg}]})
+history.append({"role": "model", "parts": [{"text": reply}]})
 history = history[-6:]
 ```
 Vì sao phải cắt? History dài ra mãi thì mỗi lượt sau càng tốn token input —
@@ -394,8 +396,8 @@ Ba điểm khác với `streaming_chatbot`:
 1. **Đầu vào tiêm được:** đọc input qua tham số `get_input` (mặc định là
    `input`). Nhờ đó test tự động "gõ phím hộ" bạn được — đây là kỹ thuật
    dependency injection bạn sẽ gặp lại suốt khóa.
-2. **System prompt cố định:** mọi lời gọi API đều bắt đầu bằng
-   `{"role": "system", "content": persona}` — persona không bị trôi mất khi
+2. **System prompt cố định:** mọi lời gọi API đều truyền
+   `config={"system_instruction": persona}` — persona không bị trôi mất khi
    history bị cắt.
 3. **Trả về thống kê** thay vì None — sản phẩm thật cần đo được chi phí.
 
@@ -405,8 +407,8 @@ Ba điểm khác với `streaming_chatbot`:
 ```python
 if get_input is None:
     get_input = input
-from openai import OpenAI
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+from google import genai
+client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 history, num_turns, total_tokens, total_cost = [], 0, 0, 0.0
 ```
 
@@ -421,18 +423,21 @@ while True:
         break
 ```
 
-**Bước 3.** Ghép messages **có system prompt đứng đầu**:
+**Bước 3.** Ghép `contents`; system prompt sẽ được truyền riêng ở `config`:
 ```python
-messages = ([{"role": "system", "content": persona}]
-            + history + [{"role": "user", "content": user_msg}])
+contents = history + [
+    {"role": "user", "parts": [{"text": user_msg}]}
+]
 ```
 
 **Bước 4.** Gọi API qua retry — bọc lời gọi trong lambda để
 `retry_with_backoff` gọi lại được khi lỗi:
 ```python
 stream = retry_with_backoff(
-    lambda: client.chat.completions.create(
-        model=OPENAI_MODEL, messages=messages, stream=True,
+    lambda: client.models.generate_content_stream(
+        model=GEMINI_MODEL,
+        contents=contents,
+        config={"system_instruction": persona},
     )
 )
 ```
@@ -492,71 +497,61 @@ copy vào `solution/`, zip, đổi tên `<mã sinh viên>_lab_1.zip`, upload LMS
 
 | Triệu chứng | Nguyên nhân | Cách sửa |
 |---|---|---|
-| Test fail dù code "chạy thật" được | Import `OpenAI` ở đầu file | Chuyển `from openai import OpenAI` vào **trong** hàm |
+| Test fail dù code "chạy thật" được | Import `genai` ở đầu file | Chuyển `from google import genai` vào **trong** hàm |
 | `AuthenticationError` khi chạy pytest | Code đang gọi API thật thay vì mock | Cùng nguyên nhân trên — mock không "bắt" được import đầu file |
-| `KeyError: 'gpt4o_response'` | Tên key trong dict gõ sai | So từng ký tự với docstring |
-| Chunk cuối làm crash (`TypeError: ... NoneType`) | Quên `or ""` khi đọc `delta.content` | `delta = chunk.choices[0].delta.content or ""` |
+| `AuthenticationError` khi chạy demo | Gemini key thiếu hoặc sai | Kiểm tra `GEMINI_API_KEY` trong `.env`, không thêm dấu nháy/khoảng trắng |
+| `NotFoundError` / model không tồn tại | Sai model ID | Dùng `gemini-2.5-pro` hoặc `gemini-2.5-flash` |
+| `KeyError: 'gemini_response'` | Tên key trong dict gõ sai | So từng ký tự với docstring |
+| Chunk cuối làm crash (`TypeError: ... NoneType`) | Quên `or ""` khi đọc `chunk.text` | `delta = chunk.text or ""` |
 | History phình to, chi phí tăng dần | Quên cắt history | `history = history[-6:]` sau mỗi lượt |
 | `StopIteration` trong test scenario | Đọc input nhiều hơn số lượt kịch bản | Kiểm tra `max_turns` **trước** khi `get_input()` |
 | tiktoken treo/lỗi khi offline | Lần đầu cần mạng để tải encoding | Fallback `max(1, len(text) // 4)` trong try/except |
 
 ---
 
-## Phụ Lục B — Lấy API Key MIỄN PHÍ từ NVIDIA NIM
+## Phụ Lục B — Cấu Hình Google Gemini API
 
-NVIDIA NIM cung cấp endpoint **tương thích chuẩn OpenAI** với hàng nghìn
-lượt gọi miễn phí — đủ dư cho cả buổi lab. Code của bạn **không phải sửa
-dòng nào**: OpenAI SDK tự đọc `OPENAI_BASE_URL` từ `.env`, còn tên model
-đã được `template.py` đọc qua biến `LAB_MODEL` / `LAB_MINI_MODEL`.
+Project dùng SDK chính thức `google-genai`; chỉ cần API key, không cần cấu
+hình base URL.
 
-### Bước 1 — Đăng ký tài khoản (miễn phí, không cần thẻ)
+### Bước 1 — Tạo API key
 
-1. Mở [build.nvidia.com](https://build.nvidia.com)
-2. Bấm **Login** (góc phải trên) → chọn **Create Account** nếu chưa có.
-   Dùng email trường hoặc email cá nhân đều được.
-3. Xác nhận email là xong.
+1. Mở [Google AI Studio — API Keys](https://aistudio.google.com/app/apikey).
+2. Đăng nhập tài khoản Google và chọn **Create API key**.
+3. Copy key và không chia sẻ hoặc commit key lên Git.
 
-### Bước 2 — Tạo API key
+### Bước 2 — Cấu hình `.env`
 
-1. Sau khi đăng nhập, mở một model bất kỳ trong catalog — ví dụ
-   [meta/llama-3.1-8b-instruct](https://build.nvidia.com/meta/llama-3_1-8b-instruct)
-2. Ở panel code bên phải, bấm **Get API Key** → **Generate Key**
-3. Copy key dạng `nvapi-...` — **lưu ngay**, key chỉ hiện một lần
+Mở `.env` và điền:
 
-### Bước 3 — Cấu hình `.env`
-
-Mở `.env` và thay bằng (mẫu có sẵn trong `.env.example`):
-
-```bash
-OPENAI_API_KEY=nvapi-key-cua-ban
-OPENAI_BASE_URL=https://integrate.api.nvidia.com/v1
-LAB_MODEL=meta/llama-3.3-70b-instruct
-LAB_MINI_MODEL=meta/llama-3.1-8b-instruct
+```dotenv
+GEMINI_API_KEY=AIza...key-cua-ban
+LAB_MODEL=gemini-2.5-pro
+LAB_MINI_MODEL=gemini-2.5-flash
 ```
 
-Cặp model trên thay vai GPT-4o (model lớn) và GPT-4o-mini (model nhỏ) —
-bài so sánh 70B vs 8B của Block 1 vẫn nguyên giá trị: bạn sẽ thấy đúng
-sự đánh đổi chất lượng / tốc độ giữa model lớn và nhỏ.
+Cặp model trên lần lượt đóng vai model chất lượng cao và model nhanh/tiết
+kiệm của Block 1.
 
-### Bước 4 — Kiểm tra key hoạt động
+### Bước 3 — Kiểm tra key hoạt động
 
 ```bash
 python -c "
-from template import call_openai
-text, latency = call_openai('Chào bạn, hãy trả lời bằng 1 câu tiếng Việt.')
+from template import call_gemini
+text, latency = call_gemini('Chào bạn, hãy trả lời bằng 1 câu tiếng Việt.')
 print(f'[{latency:.2f}s] {text}')
 "
 ```
 
 Thấy câu trả lời tiếng Việt in ra là xong — làm tiếp lab như bình thường.
 
-### Lưu ý khi dùng NIM
+### Lưu ý khi dùng Gemini
 
 - **pytest và `python grade.py` không cần key** — mọi test đều mock, nên
-  điểm số không phụ thuộc bạn dùng OpenAI hay NIM.
-- `count_tokens` không có bảng mã cho model Llama → tự động rơi về ước
+  điểm số không phụ thuộc API hoặc hạn mức Gemini.
+- `count_tokens` không có bảng mã tiktoken cho model Gemini → tự động rơi về ước
   lượng `len(text) // 4` (đúng như thiết kế fallback ở Task 2.2).
-- `estimate_cost` với model lạ dùng giá gpt-4o làm **tham chiếu học tập**
-  (NIM thực tế miễn phí) — xem gợi ý `.get(...)` trong docstring Task 2.3.
+- Bảng giá trong `template.py` chỉ phục vụ bài tập ước tính; hãy kiểm tra
+  trang giá Gemini chính thức trước khi dùng con số cho sản phẩm thật.
 - Nếu gặp lỗi 429 (hết hạn mức tạm thời) — chính là lúc `retry_with_backoff`
   của Task 3.2 tỏa sáng.
